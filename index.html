@@ -651,9 +651,16 @@ function playAt(idx){
 function mkPlayer(vid){
   player=new YT.Player('yt-player',{
     videoId:vid,
-    playerVars:{autoplay:1,playsinline:1,controls:0,modestbranding:1,rel:0},
+    playerVars:{autoplay:1,playsinline:1,controls:1,modestbranding:1,rel:0},
     events:{
-      onReady:function(e){e.target.playVideo();playing=true;updateUI();},
+      onReady:function(e){
+        e.target.playVideo();playing=true;updateUI();
+        // Patch iframe allow attribute for PiP
+        setTimeout(function(){
+          var iframe=document.querySelector('#yt-player iframe');
+          if(iframe){iframe.setAttribute('allow','autoplay; fullscreen; picture-in-picture');}
+        },300);
+      },
       onStateChange:function(e){
         playing=(e.data===YT.PlayerState.PLAYING);
         updateUI();
@@ -701,13 +708,40 @@ function updateUI(){
 }
 async function triggerPiP(){
   sp(document.querySelector('.cbtn.pip'),0.9);
-  var videos=document.querySelectorAll('video');
-  if(!videos.length){var iframe=document.querySelector('#yt-player iframe');if(iframe){try{videos=iframe.contentDocument.querySelectorAll('video');}catch(e){}}}
-  if(videos.length&&document.pictureInPictureEnabled){
-    try{await videos[0].requestPictureInPicture();toast('// PiP active — screen off OK');return;}catch(e){}
+  var iframe=document.querySelector('#yt-player iframe');
+  if(iframe){iframe.setAttribute('allow','autoplay; fullscreen; picture-in-picture');}
+  var videos=Array.from(document.querySelectorAll('video'));
+  for(var i=0;i<videos.length;i++){
+    var v=videos[i];
+    if(v.webkitSupportsPresentationMode&&v.webkitSupportsPresentationMode('picture-in-picture')){
+      try{v.webkitSetPresentationMode('picture-in-picture');toast('// PiP active — screen off OK');return;}catch(e){}
+    }
+    if(document.pictureInPictureEnabled){
+      try{await v.requestPictureInPicture();toast('// PiP active — screen off OK');return;}catch(e){}
+    }
   }
-  toast('// long-press video → Picture in Picture');
+  showPipGuide();
 }
+
+function showPipGuide(){
+  var ex=document.getElementById('pip-overlay');
+  if(ex){ex.remove();return;}
+  var ov=document.createElement('div');
+  ov.id='pip-overlay';
+  ov.style.cssText='position:fixed;inset:0;z-index:999;background:rgba(0,0,0,0.9);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:32px;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);font-family:var(--mono);';
+  var html='<div style="font-size:17px;font-weight:700;color:#e8ff47;letter-spacing:-0.3px;text-align:center;">BẬT PiP THỦ CÔNG</div>';
+  html+='<div style="font-size:12.5px;color:rgba(255,255,255,0.62);line-height:1.9;text-align:center;">';
+  html+='<span style="color:rgba(255,255,255,0.3)">// iOS Safari</span><br>';
+  html+='Nhấn nút <b style="color:white">⊞</b> góc phải dưới video<br>hoặc nhấn giữ video → <b style="color:white">Picture in Picture</b><br><br>';
+  html+='<span style="color:rgba(255,255,255,0.3)">// Android Chrome</span><br>';
+  html+='Nhấn nút <b style="color:white">Home</b> khi đang xem video<br>Chrome tự bật PiP';
+  html+='</div>';
+  html+='<button id="pip-ok" style="margin-top:8px;padding:11px 28px;border-radius:30px;border:0.5px solid rgba(232,255,71,0.3);background:rgba(232,255,71,0.08);color:#e8ff47;font-family:var(--mono);font-size:13px;font-weight:600;cursor:pointer;letter-spacing:0.5px;">OK</button>';
+  ov.innerHTML=html;
+  document.body.appendChild(ov);
+  ov.addEventListener('click',function(e){if(e.target===ov||e.target.id==='pip-ok')ov.remove();});
+}
+
 // Touch spring
 (function(){
   var sel='.step,.gobtn,.cbtn,.gtog,.plhead,.plitem,.pldel,.pabtn';
